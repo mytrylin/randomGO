@@ -25,7 +25,7 @@
     <div class="card grid grid-cols-2" aria-label="許願池輸入區域">
       <div>
         <label for="withList">與誰（每行一個）</label>
-        <textarea id="withList" v-model="form.with" placeholder="小月"></textarea>
+        <textarea id="withList" v-model="form.with" placeholder="小月 學長 學妹 陳阿姨"></textarea>
         <div class="hint">留空則此欄位不會出現在輸出</div>
       </div>
       <div>
@@ -34,12 +34,12 @@
       </div>
       <div>
         <label for="endList">時間－迄（每行一個，任意文字）</label>
-        <textarea id="endList" v-model="form.end" placeholder="11月13日下週一"></textarea>
+        <textarea id="endList" v-model="form.end" placeholder="11月13日"></textarea>
         <div class="hint">如果有起也有迄，會以「起～迄」呈現；只有起就顯示起</div>
       </div>
       <div>
         <label for="placeList">地點（每行一個）</label>
-        <textarea id="placeList" v-model="form.place" placeholder="南港陽明山平溪花蓮"></textarea>
+        <textarea id="placeList" v-model="form.place" placeholder="南港 陽明山 平溪 花蓮"></textarea>
       </div>
       <div>
         <label for="routeGoList">行程／路線（每行一個）</label>
@@ -55,10 +55,10 @@
     <div class="spacer"></div>
 
     <div class="card">
-      <div class="row" style="justify-content: space-between; align-items: flex-start; gap: 12px;">
+      <div class="row">
         <div>
           <div class="muted small">輸出</div>
-          <div class="output" role="status" aria-live="polite">{{ output || '還沒有抽籤，先按一下「抽一下」吧' }}</div>
+          <div class="output" role="status" aria-live="polite">{{ output || '還沒有抽籤，請先按-抽一下' }}</div>
         </div>
         <div class="row">
           <button class="btn" @click="randomGO">抽一下</button>
@@ -72,6 +72,7 @@
     <div class="footer">
       <div class="row">
         <span class="tag">亂數行程</span>
+        <span class="tag">約會</span>
         <span class="tag">旅遊安排</span>
         <span class="tag">常用設定匯入/出</span>
       </div>
@@ -84,11 +85,10 @@
     const { createApp, reactive, computed, watch, onMounted, ref } = Vue;
 
     function byLine(str){
-      // 不用正則，避免某些環境解析 /\r?\n/ 出包
       if (!str) return [];
       return str
-        .split('\r').join('') // 先移除 CR
-        .split('\n')          // 再用 LF 分割
+        .split('\r').join('')
+        .split('\n')
         .map(s => s.trim())
         .filter(Boolean);
     }
@@ -132,8 +132,8 @@
             form.avoid = Number.isFinite(data.avoid) ? data.avoid : 10;
           } catch {}
         }
-        function getHistory(){ try{ return JSON.parse(localStorage.getItem(LS_HISTORY) || '[]'); }catch{ return []; } }
-        function setHistory(arr){ try{ localStorage.setItem(LS_HISTORY, JSON.stringify(arr)); }catch{} }
+        function getHistory(){ try{ return JSON.parse(localStorage.getItem(LS_HISTORY) || '[]'); } catch { return []; } }
+        function setHistory(arr){ try{ localStorage.setItem(LS_HISTORY, JSON.stringify(arr)); } catch {} }
 
         function drawOnce(){
           const data = {
@@ -194,11 +194,11 @@
         }
         function loadExample () {
           const ml = a => a.map(s => String(s).trim()).filter(Boolean).join('\n'); 
-          form.with  = ml(['RAY', '德克', '阿J', '宜潔', '佩佩']);
-          form.start = ml(['11月11日','這個週末','明天','下週五']);
-          form.end   = ml(['11月13日','下週日']);
-          form.place = ml(['南港','陽明山','平溪','花蓮']);
-          form.routeGo = ml(['跑中橫','逛老街','走步道','夜拍星空']); 
+          form.with  = ml(['學長', '陳阿姨', '乾妹', '宜潔', '閨密']);
+          form.start = ml(['11月11日', '這個週末', '明天']);
+          form.end   = ml(['11月13日', '下週日']);
+          form.place = ml(['南港', '陽明山', '平溪', '中橫']);
+          form.routeGo = ml(['騎車跑山', '開車跑山', '逛街', '夜拍星空', '泡溫泉', '玩水/游泳', '看展/玩活動']); 
           form.avoid = 10;
           saveState();
         }
