@@ -1,0 +1,217 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>亂數抽籤行程工具 - randomGO</title>
+  <meta name="description" content="亂數抽籤行程工具 - randomGO" />
+  <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+  <link rel="stylesheet" href="./assets/css/index.css">
+<body>
+  <div id="app" class="container">
+    <header>
+      <div>
+        <div class="title">亂數抽籤行程工具 - randomGO</div>
+        <div class="subtitle">從許願池欄位中，亂數抽取並組成行程</div>
+      </div>
+      <div class="row">
+        <button class="btn ghost" @click="loadExample">載入範例</button>
+        <button class="btn secondary" @click="exportConfig">匯出設定</button>
+        <input type="file" ref="fileImport" accept="application/json" hidden @change="onImport" />
+        <button class="btn" @click="$refs.fileImport.click()">匯入設定</button>
+      </div>
+    </header>
+
+    <div class="card grid grid-cols-2" aria-label="許願池輸入區域">
+      <div>
+        <label for="withList">與誰（每行一個）</label>
+        <textarea id="withList" v-model="form.with" placeholder="小月"></textarea>
+        <div class="hint">留空則此欄位不會出現在輸出</div>
+      </div>
+      <div>
+        <label for="startList">時間－起（每行一個，任意文字）</label>
+        <textarea id="startList" v-model="form.start" placeholder="11月11日"></textarea>
+      </div>
+      <div>
+        <label for="endList">時間－迄（每行一個，任意文字）</label>
+        <textarea id="endList" v-model="form.end" placeholder="11月13日下週一"></textarea>
+        <div class="hint">如果有起也有迄，會以「起～迄」呈現；只有起就顯示起</div>
+      </div>
+      <div>
+        <label for="placeList">地點（每行一個）</label>
+        <textarea id="placeList" v-model="form.place" placeholder="南港陽明山平溪花蓮"></textarea>
+      </div>
+      <div>
+        <label for="routeGoList">行程／路線（每行一個）</label>
+        <textarea id="routeGoList" v-model="form.routeGo" placeholder="跑中橫"></textarea>
+      </div>
+      <div>
+        <label for="avoidRepeat">避免重複（最近 N 次）</label>
+        <input id="avoidRepeat" type="number" min="0" max="100" v-model.number="form.avoid" />
+        <div class="hint">同一句結果將盡量不與最近 N 次相同（最多嘗試 50 次）</div>
+      </div>
+    </div>
+
+    <div class="spacer"></div>
+
+    <div class="card">
+      <div class="row" style="justify-content: space-between; align-items: flex-start; gap: 12px;">
+        <div>
+          <div class="muted small">輸出</div>
+          <div class="output" role="status" aria-live="polite">{{ output || '還沒有抽籤，先按一下「抽一下」吧' }}</div>
+        </div>
+        <div class="row">
+          <button class="btn" @click="randomGO">抽一下</button>
+          <button class="btn secondary" @click="copyOut">複製</button>
+          <button class="btn danger" @click="clearHistory">清除歷史</button>
+        </div>
+      </div>
+      <div class="hint">歷史：{{ history.length }} 筆</div>
+    </div>
+
+    <div class="footer">
+      <div class="row">
+        <span class="tag">Vue 3 (CDN)｜可部署 GitHub Pages</span>
+        <span class="tag">本地儲存支援</span>
+        <span class="tag">JSON 匯入／匯出</span>
+      </div>
+      <div class="small muted">© {{ year }} randomGO</div>
+    </div>
+  </div>
+
+  <!-- Vue 3 CDN -->
+  <script>
+    const { createApp, reactive, computed, watch, onMounted, ref } = Vue;
+
+    function byLine(str){
+      // 不用正則，避免某些環境解析 /\r?\n/ 出包
+      if (!str) return [];
+      return str
+        .split('\r').join('') // 先移除 CR
+        .split('\n')          // 再用 LF 分割
+        .map(s => s.trim())
+        .filter(Boolean);
+    }
+
+    function pick(arr){ if(!arr || !arr.length) return undefined; return arr[Math.floor(Math.random()*arr.length)]; }
+    function composeSentence({withWho, startDate, endDate, place, routeGo}){
+      const segs=[];
+      if(withWho) segs.push(`與${withWho}，`);
+      if(startDate && endDate) segs.push(`${startDate}～${endDate} `); else if(startDate) segs.push(`~ ${startDate} `);
+      if(place) segs.push(`去${place} `);
+      if(routeGo) segs.push(`${routeGo} `);
+      return segs.join('') || '今天抽不到，去加點願望吧';
+    }
+
+    const LS_KEY = 'randomGO.vue.state.v1';
+    const LS_HISTORY = 'randomGO.vue.history.v1';
+
+    createApp({
+      setup(){
+        const fileImport = ref(null);
+        const form = reactive({
+          with: '', start: '', end: '', place: '', routeGo: '', avoid: 10,
+        });
+        const output = ref('');
+        const history = ref([]);
+        const year = new Date().getFullYear();
+
+        function saveState(){
+          const data = { ...form };
+          try { localStorage.setItem(LS_KEY, JSON.stringify(data)); } catch {}
+        }
+        function loadState(){
+          try{
+            const raw = localStorage.getItem(LS_KEY); if(!raw) return;
+            const data = JSON.parse(raw);
+            form.with = data.with || '';
+            form.start = data.start || '';
+            form.end = data.end || '';
+            form.place = data.place || '';
+            form.routeGo = data.routeGo || '';
+            form.avoid = Number.isFinite(data.avoid) ? data.avoid : 10;
+          } catch {}
+        }
+        function getHistory(){ try{ return JSON.parse(localStorage.getItem(LS_HISTORY) || '[]'); }catch{ return []; } }
+        function setHistory(arr){ try{ localStorage.setItem(LS_HISTORY, JSON.stringify(arr)); }catch{} }
+
+        function drawOnce(){
+          const data = {
+            withWho: pick(byLine(form.with)),
+            startDate: pick(byLine(form.start)),
+            endDate: pick(byLine(form.end)),
+            place: pick(byLine(form.place)),
+            routeGo: pick(byLine(form.routeGo)),
+          };
+          return composeSentence(data);
+        }
+        function randomGO(){
+          const avoidN = Number(form.avoid) || 0;
+          const hist = history.value;
+          let result = ''; let tries = 0;
+          do {
+            result = drawOnce();
+            tries++;
+            if(avoidN <= 0) break;
+          } while(hist.slice(-avoidN).includes(result) && tries < 50);
+          output.value = result;
+          hist.push(result);
+          history.value = hist.slice(-200);
+          setHistory(history.value);
+        }
+
+        async function copyOut(){
+          if(!output.value) return;
+          try { await navigator.clipboard.writeText(output.value); alert('已複製到剪貼簿'); }
+          catch { alert('無法使用剪貼簿，請手動複製'); }
+        }
+        function clearHistory(){ history.value = []; setHistory([]); }
+
+        function exportConfig(){
+          const blob = new Blob([localStorage.getItem(LS_KEY) || '{}'], { type: 'application/json' });
+          const a = document.createElement('a');
+          a.href = URL.createObjectURL(blob);
+          a.download = 'randomGO-config.json';
+          a.click();
+          URL.revokeObjectURL(a.href);
+        }
+        function onImport(e){
+          const f = e.target.files?.[0]; if(!f) return; e.target.value = '';
+          const reader = new FileReader();
+          reader.onload = () => {
+            try {
+              const data = JSON.parse(reader.result);
+              form.with = data.with || '';
+              form.start = data.start || '';
+              form.end = data.end || '';
+              form.place = data.place || '';
+              form.routeGo = data.routeGo || '';
+              form.avoid = Number.isFinite(data.avoid) ? data.avoid : 10;
+              saveState();
+            } catch { alert('匯入失敗：JSON 格式不正確'); }
+          };
+          reader.readAsText(f);
+        }
+        function loadExample () {
+          const ml = a => a.map(s => String(s).trim()).filter(Boolean).join('\n'); 
+          form.with  = ml(['RAY', '德克', '阿J', '宜潔', '佩佩']);
+          form.start = ml(['11月11日','這個週末','明天','下週五']);
+          form.end   = ml(['11月13日','下週日']);
+          form.place = ml(['南港','陽明山','平溪','花蓮']);
+          form.routeGo = ml(['跑中橫','逛老街','走步道','夜拍星空']); 
+          form.avoid = 10;
+          saveState();
+        }
+        watch(form, saveState, { deep:true });
+
+        onMounted(() => {
+          loadState();
+          history.value = getHistory();
+        });
+
+        return { form, output, history, year, fileImport, randomGO, copyOut, clearHistory, exportConfig, onImport, loadExample };
+      }
+    }).mount('#app');
+  </script>
+</body>
+</html>
