@@ -84,27 +84,27 @@
   <script>
     const { createApp, reactive, computed, watch, onMounted, ref } = Vue;
 
-    function byLine(str, { allowSpaces = true } = {}) {
-      let s = String(str ?? '').trim();
-      if (!s) return [];
+    function byLine(str, allowSpaces = true) {
+      let stringVal = String(str ?? '').trim();
+      if (!stringVal) return [];
 
       // 正規化行尾
-      s = s.split('\r\n').join('\n').split('\r').join('\n');
+      stringVal = stringVal.split('\r\n').join('\n').split('\r').join('\n');
 
       // 1) 有換行：以行切
-      if (s.includes('\n')) {
-        return s.split('\n').map(t => t.trim()).filter(Boolean);
+      if (stringVal.includes('\n')) {
+        return stringVal.split('\n').map(t => t.trim()).filter(Boolean);
       }
 
       // 2) 無換行：可用空白/常見分隔符切
       if (allowSpaces) {
         const seps = ['，', ',', '、', ';', '；', '|', '/', '／', '\t', '\u3000', ' '];
-        for (const sep of seps) s = s.split(sep).join('\n');
-        return s.split('\n').map(t => t.trim()).filter(Boolean);
+        for (const sep of seps) stringVal = stringVal.split(sep).join('\n');
+        return stringVal.split('\n').map(t => t.trim()).filter(Boolean);
       }
 
       // 不允許空白分割時，整段視為一個項目
-      return [s];
+      return [stringVal];
     }
 
     function pick(arr){ if(!arr || !arr.length) return undefined; return arr[Math.floor(Math.random()*arr.length)]; }
@@ -150,6 +150,7 @@
         function setHistory(arr){ try{ localStorage.setItem(LS_HISTORY, JSON.stringify(arr)); } catch {} }
 
         function drawOnce(){
+          console.log('byLine', byLine(form.with))
           const data = {
             withWho: pick(byLine(form.with)),
             startDate: pick(byLine(form.start)),
